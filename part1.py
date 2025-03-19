@@ -60,3 +60,26 @@ plt.grid(True)
 plt.show()
 
 
+# ---------------- Doesn't work yet, probably preprocessing needed ----------------
+import statsmodels.api as sm
+
+df['Id'] = df['Id'].astype('category')
+df['Calories'] = pd.to_numeric(df['Calories'], errors='coerce')
+df = df.dropna(subset=['Calories'])
+
+# Create the design matrix
+X = pd.get_dummies(df[['TotalSteps', 'Id']], drop_first=True)
+X = sm.add_constant(X)
+
+y = df['Calories']
+model = sm.OLS(y, X).fit()
+print(model.summary())
+
+# Plot the relationship between TotalSteps and Calories burnt
+plt.figure(figsize=(10, 6))
+plt.scatter(df['TotalSteps'], df['Calories'], alpha=0.5)
+plt.xlabel('Total Steps')
+plt.ylabel('Calories Burnt')
+plt.title('Relationship between Total Steps and Calories Burnt')
+plt.grid(True)
+plt.show()
