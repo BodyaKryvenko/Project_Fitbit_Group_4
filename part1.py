@@ -43,3 +43,20 @@ def plot_calories_burnt(user_id, start_date=None, end_date=None):
 
 # Example usage
 plot_calories_burnt(user_id=1503960366, start_date='2016-03-31', end_date='2016-04-07')
+
+# ----------------------------------------------------------------------
+
+df['DayOfWeek'] = df['ActivityDate'].dt.day_name()
+workout_frequency = df['DayOfWeek'].value_counts().sort_index()
+
+# Plot the frequency of workouts for each day of the week
+plt.figure(figsize=(10, 6))
+workout_frequency.plot(kind='bar')
+plt.title('Frequency of Workouts by Day of the Week')
+plt.xlabel('Day of the Week')
+plt.ylabel('Frequency of Workouts')
+plt.xticks(rotation=45)
+plt.grid(True)
+plt.show()
+
+
