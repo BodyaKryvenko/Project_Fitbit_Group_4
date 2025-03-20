@@ -385,3 +385,88 @@ plt.title('Average Sleep Minutes per 4-Hour Time Block')
 plt.show(block=False)
 
 conn.close()
+
+# ----------------------------------------------------------
+
+### PLOT HEART RATE AND INTENSITY ###
+def plot_heart_rate_and_intensity(individual_id):
+    """
+    Plots the heart rate and total intensity of exercise for a given individual.
+    """
+    conn = sqlite3.connect('fitbit_database.db')
+
+    heart_rate_query = f"""
+    SELECT 
+        Time, 
+        Value AS HeartRate
+    FROM 
+        heart_rate
+    WHERE 
+        Id = {individual_id};
+    """
+
+    heart_rate_df = pd.read_sql_query(heart_rate_query, conn)
+
+    if not heart_rate_df.empty:
+        heart_rate_df['Time'] = pd.to_datetime(heart_rate_df['Time'])
+
+    # Query intensity data for the given individual
+    intensity_query = f"""
+    SELECT 
+        ActivityHour, 
+        TotalIntensity
+    FROM 
+        hourly_intensity
+    WHERE 
+        Id = {individual_id};
+    """
+
+    intensity_df = pd.read_sql_query(intensity_query, conn)
+
+    if not intensity_df.empty:
+        intensity_df['ActivityHour'] = pd.to_datetime(intensity_df['ActivityHour'])
+
+    conn.close()
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+    # Plot heart rate
+    if not heart_rate_df.empty:
+        ax1.plot(heart_rate_df['Time'], heart_rate_df['HeartRate'], color='red', label='Heart Rate')
+        ax1.set_ylabel('Heart Rate (bpm)')
+        ax1.set_title(f'Heart Rate and Exercise Intensity for Individual {individual_id}')
+        ax1.legend()
+        ax1.grid(True)
+
+    # Plot total intensity
+    if not intensity_df.empty:
+        ax2.plot(intensity_df['ActivityHour'], intensity_df['TotalIntensity'], color='blue', label='Total Intensity')
+        ax2.set_xlabel('Time')
+        ax2.set_ylabel('Total Intensity')
+        ax2.legend()
+        ax2.grid(True)
+
+    plt.tight_layout()
+    return fig
+
+# Find all Ids with heart rate data
+conn = sqlite3.connect('fitbit_database.db')
+heart_rate_ids_query = """
+SELECT DISTINCT CAST(Id AS INTEGER) AS Id
+FROM heart_rate;
+"""
+heart_rate_ids_df = pd.read_sql_query(heart_rate_ids_query, conn)
+conn.close()
+
+print("Ids with heart rate data:")
+print(heart_rate_ids_df)
+
+# Pick an Id with heart rate data
+if not heart_rate_ids_df.empty:
+    individual_id = heart_rate_ids_df['Id'].iloc[0]
+    print(f"Selected Id: {individual_id}")
+
+    fig = plot_heart_rate_and_intensity(individual_id)
+    plt.show()
+else:
+    print("No heart rate data found in the database.")
