@@ -21,3 +21,57 @@ def classify_user(activity_count):
 user_activity_counts['Class'] = user_activity_counts['ActivityCount'].apply(classify_user)
 user_classification_df = user_activity_counts[['Id', 'Class']]
 print(user_classification_df)
+
+# ----------------------------------------------------------
+
+### INSPECTING THE DATABASE ###
+import sqlite3
+
+conn = sqlite3.connect('fitbit_database.db')
+cursor = conn.cursor()
+
+# List tables and their columns
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+tables = cursor.fetchall()
+print("Tables in the database:", tables)
+
+for table in tables:
+    table_name = table[0]
+    cursor.execute(f"PRAGMA table_info({table_name});")
+    columns = cursor.fetchall()
+    print(f"\nColumns in {table_name}:")
+    for col in columns:
+        print(col[1])
+
+# ----------------------------------------------------------
+
+### VERIFYING TOTAL STEPS MATCH ###
+def verify_total_steps(conn):
+    query = """
+    SELECT 
+        da.Id, 
+        da.ActivityDate, 
+        da.TotalSteps, 
+        SUM(hs.StepTotal) AS SumHourlySteps
+    FROM 
+        daily_activity da
+    LEFT JOIN 
+        hourly_steps hs
+    ON 
+        da.Id = hs.Id AND da.ActivityDate = DATE(hs.ActivityHour)
+    GROUP BY 
+        da.Id, da.ActivityDate
+    HAVING 
+        da.TotalSteps != SUM(hs.StepTotal);
+    """
+    
+    result = pd.read_sql_query(query, conn)
+    
+    if result.empty:
+        print("Data is consistent: TotalSteps matches the sum of hourly steps for all records.")
+    else:
+        print("Data inconsistency found. The following records have mismatched TotalSteps:")
+        print(result)
+
+verify_total_steps(conn)
+conn.close()
