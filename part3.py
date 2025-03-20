@@ -470,3 +470,69 @@ if not heart_rate_ids_df.empty:
     plt.show()
 else:
     print("No heart rate data found in the database.")
+
+
+#------------------------------------------------------------------------
+weather_df = pd.read_csv('chicago.csv')
+
+weather_df = weather_df.iloc[:,[1, 2, 3, 4, 5, 6, 7]]
+
+conn = sqlite3.connect('fitbit_database.db')
+
+intensity_query = f"""
+    SELECT 
+        ActivityHour, 
+        TotalIntensity AS TotalIntensity
+    FROM 
+        hourly_intensity
+    """
+
+intensity_df = pd.read_sql_query(intensity_query, conn)
+
+intensity_df = intensity_df.groupby(by="ActivityHour").sum()
+intensity_df = intensity_df.reset_index()
+
+intensity_df['datetime'] = pd.to_datetime(intensity_df['ActivityHour']).dt.strftime('%Y-%m-%dT%H:%M:%S')
+
+def variable_comparison(x):
+    value_df = weather_df.iloc[:, [0, x]]  
+
+    df = pd.merge(value_df, intensity_df, how='left', on='datetime')
+    df = df.dropna()
+    
+    X = df[['TotalIntensity']]
+    y = df.iloc[:, 1]
+
+    model = LinearRegression()
+    model.fit(X, y)
+    
+    print(f"\nIntercept: {model.intercept_}")
+    print(f"Coefficient: {model.coef_[0]}")
+    print(f"R-squared: {model.score(X, y)}")
+
+    residuals = y - model.predict(X)
+    
+    plt.figure(figsize=(12, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.scatter(X, y, color='blue', label='Data points')
+    plt.plot(X, model.predict(X), color='red', label='Regression line')
+    plt.xlabel('TotalIntensity')
+    plt.ylabel({weather_df.columns[x]})
+    plt.title('Regression')
+    plt.legend()
+    
+    plt.subplot(1, 2, 2)
+    stats.probplot(residuals, dist="norm", plot=plt)
+    plt.title('Q-Q Plot of Residuals')
+    plt.xlabel('Theoretical Quantiles')
+    plt.ylabel('Sample Quantiles')
+
+    plt.tight_layout()
+    plt.show(block=False)
+    
+    return df
+
+conn.close()
+
+x = variable_comparison(1) #Use 1-6 for different variables
