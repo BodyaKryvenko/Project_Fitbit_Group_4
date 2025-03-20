@@ -103,3 +103,162 @@ sleep_duration_df['logId'] = sleep_duration_df['logId'].astype(int)
 
 print(sleep_duration_df)
 conn.close()
+
+# ----------------------------------------------------------
+
+import sqlite3
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+
+conn = sqlite3.connect('fitbit_database.db')
+
+# Query to compute sleep duration for each individual and date
+sleep_query = """
+SELECT 
+    Id,
+    date,
+    value,
+    logId
+FROM 
+    minute_sleep;
+"""
+
+sleep_df = pd.read_sql_query(sleep_query, conn)
+sleep_df['Id'] = sleep_df['Id'].astype(int)
+sleep_df['date'] = pd.to_datetime(sleep_df['date']).dt.date
+
+# Filter rows where value = 1 (indicating sleep)
+sleep_df = sleep_df[sleep_df['value'] == 1]
+
+sleep_duration_df = sleep_df.groupby(['Id', 'date']).size().reset_index(name='SleepDurationMinutes')
+
+# ----------------------------------------------------------
+
+### DURATION OF SLEEP TO ACTIVE MINUTES ###
+# Compute total active minutes for each individual and date
+active_minutes_query = """
+SELECT 
+    Id,
+    ActivityDate,
+    (VeryActiveMinutes + FairlyActiveMinutes + LightlyActiveMinutes) AS TotalActiveMinutes
+FROM 
+    daily_activity;
+"""
+
+active_minutes_df = pd.read_sql_query(active_minutes_query, conn)
+active_minutes_df['Id'] = active_minutes_df['Id'].astype(int)
+active_minutes_df['ActivityDate'] = pd.to_datetime(active_minutes_df['ActivityDate']).dt.date
+
+merged_df = pd.merge(
+    active_minutes_df,
+    sleep_duration_df,
+    left_on=['Id', 'ActivityDate'],
+    right_on=['Id', 'date'],
+    how='inner'
+)
+
+merged_df = merged_df[['Id', 'ActivityDate', 'TotalActiveMinutes', 'SleepDurationMinutes']]
+merged_df = merged_df.rename(columns={'ActivityDate': 'Date'})
+
+print("Activity and sleep dataframe")
+print(merged_df.head())
+
+# Perform linear regression
+X = merged_df[['TotalActiveMinutes']]
+y = merged_df['SleepDurationMinutes']
+
+model = LinearRegression()
+model.fit(X, y)
+
+print(f"Intercept: {model.intercept_}")
+print(f"Coefficient: {model.coef_[0]}")
+print(f"R-squared: {model.score(X, y)}")
+
+# Calculate residuals
+residuals = y - model.predict(X)
+
+plt.figure(figsize=(12, 5))
+
+# Scatter plot
+plt.subplot(1, 2, 1)
+plt.scatter(X, y, color='blue')
+plt.plot(X, model.predict(X), color='red')
+plt.xlabel('Total Active Minutes')
+plt.ylabel('Sleep Duration Minutes')
+plt.title('Regression of Sleep Duration on Total Active Minutes')
+plt.legend()
+
+# Q-Q plot for residuals
+plt.subplot(1, 2, 2)
+stats.probplot(residuals, dist="norm", plot=plt)
+plt.title('Q-Q Plot of Residuals')
+plt.xlabel('Theoretical Quantiles')
+plt.ylabel('Sample Quantiles')
+
+plt.tight_layout()
+plt.show(block=False)
+
+# ----------------------------------------------------------
+
+### DURATION OF SLEEP TO SEDENTARY MINUTES ###
+sedentary_query = """
+SELECT 
+    Id,
+    ActivityDate,
+    SedentaryMinutes
+FROM 
+    daily_activity;
+"""
+
+sedentary_df = pd.read_sql_query(sedentary_query, conn)
+sedentary_df['Id'] = sedentary_df['Id'].astype(int)
+sedentary_df['ActivityDate'] = pd.to_datetime(sedentary_df['ActivityDate']).dt.date
+
+merged_df = pd.merge(
+    sedentary_df,
+    sleep_duration_df,
+    left_on=['Id', 'ActivityDate'],
+    right_on=['Id', 'date'],
+    how='inner'
+)
+
+merged_df = merged_df[['Id', 'ActivityDate', 'SedentaryMinutes', 'SleepDurationMinutes']]
+merged_df = merged_df.rename(columns={'ActivityDate': 'Date'})
+
+# Perform linear regression
+X = merged_df[['SedentaryMinutes']]
+y = merged_df['SleepDurationMinutes']
+
+model = LinearRegression()
+model.fit(X, y)
+
+print(f"\nIntercept: {model.intercept_}")
+print(f"Coefficient: {model.coef_[0]}")
+print(f"R-squared: {model.score(X, y)}")
+
+residuals = y - model.predict(X)
+
+plt.figure(figsize=(12, 5))
+
+# Scatter plot
+plt.subplot(1, 2, 1)
+plt.scatter(X, y, color='blue')
+plt.plot(X, model.predict(X), color='red')
+plt.xlabel('Sedentary Minutes')
+plt.ylabel('Sleep Duration Minutes')
+plt.title('Regression of Sleep Duration on Sedentary Minutes')
+plt.legend()
+
+# Q-Q plot
+plt.subplot(1, 2, 2)
+stats.probplot(residuals, dist="norm", plot=plt)
+plt.title('Q-Q Plot of Residuals')
+plt.xlabel('Theoretical Quantiles')
+plt.ylabel('Sample Quantiles')
+
+plt.tight_layout()
+plt.show(block=False)
+
+conn.close()
