@@ -75,3 +75,31 @@ def verify_total_steps(conn):
 
 verify_total_steps(conn)
 conn.close()
+
+# ----------------------------------------------------------
+
+### SLEEP DURATION ###
+conn = sqlite3.connect('fitbit_database.db')
+
+# Compute sleep duration for each logId
+query = """
+SELECT 
+    Id, 
+    logId, 
+    COUNT(*) AS SleepDurationMinutes
+FROM 
+    minute_sleep
+WHERE 
+    value = 1
+GROUP BY 
+    Id, logId;
+"""
+
+sleep_duration_df = pd.read_sql_query(query, conn)
+
+# Ensure Id and logId are integers
+sleep_duration_df['Id'] = sleep_duration_df['Id'].astype(int)
+sleep_duration_df['logId'] = sleep_duration_df['logId'].astype(int)
+
+print(sleep_duration_df)
+conn.close()
