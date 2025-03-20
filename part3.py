@@ -262,3 +262,126 @@ plt.tight_layout()
 plt.show(block=False)
 
 conn.close()
+
+# -----------------------------------------
+conn = sqlite3.connect('fitbit_database.db')
+
+# Define the 4-hour blocks
+time_blocks = {
+    '0-4': (0, 4),
+    '4-8': (4, 8),
+    '8-12': (8, 12),
+    '12-16': (12, 16),
+    '16-20': (16, 20),
+    '20-24': (20, 24)
+}
+
+chronological_order = ['0-4', '4-8', '8-12', '12-16', '16-20', '20-24']
+
+# Function to assign a time block based on the hour
+def assign_time_block(hour):
+    for block, (start, end) in time_blocks.items():
+        if start <= hour < end:
+            return block
+    return None
+
+# ----------------------------------------------------------
+### AVERAGE STEPS PER TIME BLOCK ###
+
+hourly_steps_query = """
+SELECT 
+    Id, 
+    ActivityHour, 
+    StepTotal
+FROM 
+    hourly_steps;
+"""
+
+hourly_steps_df = pd.read_sql_query(hourly_steps_query, conn)
+
+hourly_steps_df['ActivityHour'] = pd.to_datetime(hourly_steps_df['ActivityHour'])
+hourly_steps_df['Hour'] = hourly_steps_df['ActivityHour'].dt.hour
+
+hourly_steps_df['TimeBlock'] = hourly_steps_df['Hour'].apply(assign_time_block)
+
+# Average steps per time block
+average_steps_per_block = hourly_steps_df.groupby('TimeBlock')['StepTotal'].mean().reset_index()
+
+average_steps_per_block['TimeBlock'] = pd.Categorical(average_steps_per_block['TimeBlock'], categories=chronological_order, ordered=True)
+average_steps_per_block = average_steps_per_block.sort_values('TimeBlock')
+
+plt.figure(figsize=(10, 6))
+plt.bar(average_steps_per_block['TimeBlock'], average_steps_per_block['StepTotal'], color='blue')
+plt.xlabel('Time Block')
+plt.ylabel('Average Steps')
+plt.title('Average Steps per 4-Hour Time Block')
+plt.show(block=False)
+
+# ----------------------------------------------------------
+### AVERAGE CALORIES BURNT PER TIME BLOCK ###
+
+hourly_calories_query = """
+SELECT 
+    Id, 
+    ActivityHour, 
+    Calories
+FROM 
+    hourly_calories;
+"""
+
+hourly_calories_df = pd.read_sql_query(hourly_calories_query, conn)
+
+hourly_calories_df['ActivityHour'] = pd.to_datetime(hourly_calories_df['ActivityHour'])
+hourly_calories_df['Hour'] = hourly_calories_df['ActivityHour'].dt.hour
+
+hourly_calories_df['TimeBlock'] = hourly_calories_df['Hour'].apply(assign_time_block)
+
+# Average calories burnt per time block
+average_calories_per_block = hourly_calories_df.groupby('TimeBlock')['Calories'].mean().reset_index()
+
+average_calories_per_block['TimeBlock'] = pd.Categorical(average_calories_per_block['TimeBlock'], categories=chronological_order, ordered=True)
+average_calories_per_block = average_calories_per_block.sort_values('TimeBlock')
+
+plt.figure(figsize=(10, 6))
+plt.bar(average_calories_per_block['TimeBlock'], average_calories_per_block['Calories'], color='green')
+plt.xlabel('Time Block')
+plt.ylabel('Average Calories Burnt')
+plt.title('Average Calories Burnt per 4-Hour Time Block')
+plt.show(block=False)
+
+# ----------------------------------------------------------
+### AVERAGE SLEEP MINUTES PER TIME BLOCK ###
+
+minute_sleep_query = """
+SELECT 
+    Id, 
+    date, 
+    value
+FROM 
+    minute_sleep;
+"""
+
+minute_sleep_df = pd.read_sql_query(minute_sleep_query, conn)
+
+minute_sleep_df['date'] = pd.to_datetime(minute_sleep_df['date'])
+minute_sleep_df['Hour'] = minute_sleep_df['date'].dt.hour
+
+minute_sleep_df['TimeBlock'] = minute_sleep_df['Hour'].apply(assign_time_block)
+
+minute_sleep_df = minute_sleep_df[minute_sleep_df['value'] == 1]
+
+# Average sleep minutes per time block
+average_sleep_per_block = minute_sleep_df.groupby('TimeBlock').size().reset_index(name='SleepMinutes')
+average_sleep_per_block['SleepMinutes'] /= len(minute_sleep_df['Id'].unique())
+
+average_sleep_per_block['TimeBlock'] = pd.Categorical(average_sleep_per_block['TimeBlock'], categories=chronological_order, ordered=True)
+average_sleep_per_block = average_sleep_per_block.sort_values('TimeBlock')
+
+plt.figure(figsize=(10, 6))
+plt.bar(average_sleep_per_block['TimeBlock'], average_sleep_per_block['SleepMinutes'], color='purple')
+plt.xlabel('Time Block')
+plt.ylabel('Average Sleep Minutes')
+plt.title('Average Sleep Minutes per 4-Hour Time Block')
+plt.show(block=False)
+
+conn.close()
