@@ -3,7 +3,7 @@ import pandas as pd
 
 activity_df = pd.read_csv('daily_acivity.csv')
 
-# Ensure Ids aren't converted to scientific notation
+# Ensures Ids aren't converted to scientific notation
 activity_df['Id'] = activity_df['Id'].astype(int)
 
 user_activity_counts = activity_df['Id'].value_counts().reset_index()
