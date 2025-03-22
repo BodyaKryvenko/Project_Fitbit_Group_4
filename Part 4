@@ -1,1 +1,34 @@
+import sqlite3
 
+# Connect to the SQLite database
+conn = sqlite3.connect('fitbit_database.db')
+cursor = conn.cursor()
+
+
+# Query the weight_log table
+cursor.execute("SELECT * FROM weight_log;")
+rows = cursor.fetchall()
+
+# Get column names
+cursor.execute("PRAGMA table_info(weight_log);")
+columns = cursor.fetchall()
+column_names = [column[1] for column in columns]
+
+# Print the column names
+print("Columns in weight_log table:", column_names)
+
+# Print the rows with missing values highlighted
+print("\nData in weight_log table (missing values highlighted):")
+for row in rows:
+    formatted_row = []
+    for i, value in enumerate(row):
+        if value is None:  # Check for NULL values
+            formatted_row.append(f"[MISSING: {column_names[i]}]")
+        else:
+            formatted_row.append(str(value))
+    print(tuple(formatted_row))
+
+# Close the connection
+conn.close()
+
+---------------------#
