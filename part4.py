@@ -32,3 +32,38 @@ for row in rows:
 conn.close()
 
 ---------------------#
+import sqlite3
+
+# Connect to the SQLite database
+conn = sqlite3.connect('fitbit_database.db')
+cursor = conn.cursor()
+
+# Query the weight_log table
+cursor.execute("SELECT * FROM weight_log;")
+rows = cursor.fetchall()
+
+# Change missing WeightKg using the average of non-missing values
+cursor.execute("""
+    UPDATE weight_log
+    SET WeightKg = (SELECT AVG(WeightKg) FROM weight_log WHERE WeightKg IS NOT NULL)
+    WHERE WeightKg IS NULL;
+""")
+
+cursor.execute("""
+    UPDATE weight_log
+    SET Fat = (1.2 * BMI + 6.9 - 10.8)
+    WHERE Fat IS NULL;
+""")
+
+# Commit the changes to the database
+conn.commit()
+
+# Verify the changes
+cursor.execute("SELECT * FROM weight_log;")
+updated_rows = cursor.fetchall()
+print("\nUpdated weight_log table:")
+for row in updated_rows:
+    print(row)
+
+# Close the connection
+conn.close()
