@@ -286,3 +286,40 @@ plt.ylabel('Sample Quantiles')
 
 plt.tight_layout()
 plt.show(block=False)
+
+
+#-------------------
+
+def get_activity_summary(conn, user_id, date):
+    """
+    Fetches Calories, TotalSteps, and Total Active Minutes (Very + Fairly + Lightly) 
+    for a given user on a specific date.
+    
+    Parameters:
+        conn (sqlite3.Connection): SQLite database connection
+        user_id (int): The Id of the user
+        date (str): The date in 'YYYY-MM-DD' format
+    
+    Returns:
+        dict: A dictionary with Calories, TotalSteps, and TotalActiveMinutes
+    """
+    query = """
+    SELECT Calories, TotalSteps, 
+           (VeryActiveMinutes + FairlyActiveMinutes + LightlyActiveMinutes) AS TotalActiveMinutes
+    FROM daily_activity
+    WHERE Id = ? AND ActivityDate = ?;
+    """
+    
+    df = pd.read_sql_query(query, conn, params=(user_id, date))
+    
+    if df.empty:
+        return f"No data found for Id {user_id} on {date}"
+    
+    return df.iloc[0].to_dict()  # Convert row to dictionary
+
+# Example usage
+conn = sqlite3.connect('fitbit_database.db')
+result = get_activity_summary(conn, 1503960366, "4/5/2016")
+conn.close()
+
+print(result)
