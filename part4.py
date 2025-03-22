@@ -100,3 +100,40 @@ print(merged_df)
 
 conn.close()
 
+
+
+---------------------#
+
+
+def graph(id, stat):
+    """
+    Displays a graph of a statistic over time for an individual with id = id.
+    Available stats: 'Calories', 'TotalIntensity', 'AverageIntensity', 'StepTotal'
+    """
+    if stat not in ["Calories", "TotalIntensity", "AverageIntensity", "StepTotal"]:
+        print("Invalid stat. Choose from: 'Calories', 'TotalIntensity', 'AverageIntensity', 'StepTotal'")
+        return
+
+    # Filter data for the given Id
+    user_data = merged_df[merged_df["Id"] == id].sort_values(by="ActivityHour")
+
+    if user_data.empty:
+        print(f"No data found for Id {id}")
+        return
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(user_data["ActivityHour"], user_data[stat], marker="o", linestyle="-", label=stat, color="b")
+
+    plt.xlabel("Time")
+    plt.ylabel(stat)
+    plt.title(f"{stat} Over Time for Id {id}")
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+# Example usage
+graph(1503960366, "TotalIntensity")
+
