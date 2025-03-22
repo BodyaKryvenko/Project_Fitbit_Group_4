@@ -137,3 +137,111 @@ def graph(id, stat):
 # Example usage
 graph(1503960366, "TotalIntensity")
 
+
+---------------------#
+
+
+# Connect to SQLite database
+conn = sqlite3.connect('fitbit_database.db')
+
+
+# SQL query to calculate average calories per hour for each user
+query1 = """
+SELECT 
+    Id, 
+    AVG(Calories) AS AvgCaloriesPerHour
+FROM hourly_calories
+GROUP BY Id;
+"""
+
+# Read into a DataFrame
+df_avg_calories = pd.read_sql_query(query1, conn)
+
+query2 = """
+SELECT 
+    Id, 
+    AVG(StepTotal) AS AvgStepsPerHour
+FROM hourly_steps
+GROUP BY Id;
+"""
+
+# Read into a DataFrame
+df_avg_steps = pd.read_sql_query(query2, conn)
+
+query3 = """
+SELECT 
+    Id, 
+    SUM(value) AS Sleep
+FROM minute_sleep
+GROUP BY Id;
+"""
+
+# Read into a DataFrame
+df_sleep = pd.read_sql_query(query3, conn)
+
+# Fetch average intensity per user
+query4 = """
+SELECT 
+    Id, 
+    AVG(AverageIntensity) AS AvgIntensity
+FROM hourly_intensity
+GROUP BY Id;
+"""
+df_avg_intensity = pd.read_sql_query(query4, conn)
+
+
+
+# Merge all DataFrames on 'Id'
+df_merged = df_avg_calories.merge(df_avg_steps, on="Id", how="outer") \
+                           .merge(df_sleep, on="Id", how="outer") \
+                           .merge(df_avg_intensity, on="Id", how="outer")
+
+df_merged["Sleep"] = df_merged["Sleep"].fillna(0)
+
+
+query5 = """
+SELECT * FROM weight_log;
+"""
+df_weight_log = pd.read_sql_query(query5, conn)
+
+# Keep only the most recent weight entry per user
+df_weight_log_sorted = df_weight_log.sort_values(by=["Id", "Date"], ascending=[True, False])
+df_latest_weight = df_weight_log_sorted.drop_duplicates(subset=["Id"], keep="first")
+
+# Merge on Id
+df_merged2 = df_latest_weight.merge(df_merged, on="Id", how="left")
+
+query6 = """
+SELECT 
+    Id,
+    AVG(TotalSteps) AS AvgTotalSteps,
+    AVG(TotalDistance) AS AvgTotalDistance,
+    AVG(TrackerDistance) AS AvgTrackerDistance,
+    AVG(LoggedActivitiesDistance) AS AvgLoggedActivitiesDistance,
+    AVG(VeryActiveDistance) AS AvgVeryActiveDistance,
+    AVG(ModeratelyActiveDistance) AS AvgModeratelyActiveDistance,
+    AVG(LightActiveDistance) AS AvgLightActiveDistance,
+    AVG(SedentaryActiveDistance) AS AvgSedentaryActiveDistance,
+    AVG(VeryActiveMinutes) AS AvgVeryActiveMinutes,
+    AVG(FairlyActiveMinutes) AS AvgFairlyActiveMinutes,
+    AVG(LightlyActiveMinutes) AS AvgLightlyActiveMinutes,
+    AVG(SedentaryMinutes) AS AvgSedentaryMinutes
+FROM daily_activity
+GROUP BY Id;
+"""
+df_avg_activity = pd.read_sql_query(query6, conn)
+
+# Close the connection
+conn.close()
+
+# Merge with the existing merged dataset
+df_avg_final = df_merged2.merge(df_avg_activity, on="Id", how="outer")
+
+
+
+# Close the database connection
+conn.close()
+
+
+# Display the merged DataFrame
+print(df_avg_final)
