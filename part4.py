@@ -67,3 +67,36 @@ for row in updated_rows:
 
 # Close the connection
 conn.close()
+
+
+---------------------#
+
+
+conn = sqlite3.connect('fitbit_database.db')
+cursor = conn.cursor()
+
+# Query the weight_log table
+cursor.execute("SELECT * FROM weight_log;")
+rows = cursor.fetchall()
+
+query = """
+SELECT 
+    hc.Id, 
+    hc.ActivityHour, 
+    hc.Calories, 
+    hi.TotalIntensity, 
+    hi.AverageIntensity, 
+    hs.StepTotal
+FROM hourly_calories AS hc
+LEFT JOIN hourly_intensity AS hi 
+    ON hc.Id = hi.Id AND hc.ActivityHour = hi.ActivityHour
+LEFT JOIN hourly_steps AS hs 
+    ON hc.Id = hs.Id AND hc.ActivityHour = hs.ActivityHour;
+"""
+
+merged_df = pd.read_sql_query(query, conn)
+
+print(merged_df)
+
+conn.close()
+
