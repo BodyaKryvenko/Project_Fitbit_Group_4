@@ -31,7 +31,7 @@ for row in rows:
 # Close the connection
 conn.close()
 
----------------------#
+#---------------------
 import sqlite3
 
 # Connect to the SQLite database
@@ -69,7 +69,7 @@ for row in updated_rows:
 conn.close()
 
 
----------------------#
+#---------------------
 
 
 conn = sqlite3.connect('fitbit_database.db')
@@ -102,7 +102,7 @@ conn.close()
 
 
 
----------------------#
+#---------------------
 
 
 def graph(id, stat):
@@ -138,7 +138,7 @@ def graph(id, stat):
 graph(1503960366, "TotalIntensity")
 
 
----------------------#
+#---------------------
 
 
 # Connect to SQLite database
@@ -245,3 +245,44 @@ conn.close()
 
 # Display the merged DataFrame
 print(df_avg_final)
+
+
+#---------------------
+
+
+
+# Perform linear regression, change names in X and y to change the two compared values
+df_final = df_avg_final.dropna(subset=["BMI", "Sleep"]) #If necessary
+X = df_final[['BMI']] 
+y = df_final['Sleep']
+
+model = LinearRegression()
+model.fit(X, y)
+
+print(f"\nIntercept: {model.intercept_}")
+print(f"Coefficient: {model.coef_[0]}")
+print(f"R-squared: {model.score(X, y)}")
+
+# Calculate residuals for qqplot
+residuals = y - model.predict(X)
+
+plt.figure(figsize=(12, 5))
+
+# Scatter plot with regression line
+plt.subplot(1, 2, 1)
+plt.scatter(X, y, color='blue', label='Data points')
+plt.plot(X, model.predict(X), color='red', label='Regression line')
+plt.xlabel('BMI')
+plt.ylabel('Total Sleep')
+plt.title('Regression of Sleep Duration on BMI')
+plt.legend()
+
+# Q-Q plot for residuals
+plt.subplot(1, 2, 2)
+stats.probplot(residuals, dist="norm", plot=plt)
+plt.title('Q-Q Plot of Residuals')
+plt.xlabel('Theoretical Quantiles')
+plt.ylabel('Sample Quantiles')
+
+plt.tight_layout()
+plt.show(block=False)
