@@ -82,6 +82,16 @@ def main():
     st.sidebar.title("Navigation")
     page = st.sidebar.radio("Go to", ["Home", "User Analysis", "Time Analysis", "Sleep Analysis"])
 
+    if not activity_df.empty:
+        user_ids = sorted(activity_df['Id'].unique())
+    else:
+        user_ids = []
+
+    if user_ids:
+        selected_user_id = st.sidebar.selectbox("Select User ID", user_ids)
+    else:
+        selected_user_id = None
+
     if page == "Home":
         pass
     elif page == "User Analysis":
