@@ -105,6 +105,8 @@ print(sleep_duration_df)
 conn.close()
 
 # ----------------------------------------------------------
+import matplotlib
+matplotlib.use('TkAgg')
 
 import sqlite3
 import pandas as pd
