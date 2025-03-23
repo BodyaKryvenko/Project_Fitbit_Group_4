@@ -78,3 +78,15 @@ def main():
     for key in db_data:
         if not db_data[key].empty:
             db_data[key] = preprocess_time_data(db_data[key])
+
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio("Go to", ["Home", "User Analysis", "Time Analysis", "Sleep Analysis"])
+
+    if page == "Home":
+        pass
+    elif page == "User Analysis":
+        pass
+    elif page == "Time Analysis":
+        pass
+    elif page == "Sleep Analysis":
+        pass
