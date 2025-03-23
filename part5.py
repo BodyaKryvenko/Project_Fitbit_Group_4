@@ -7,6 +7,7 @@ import statsmodels.api as sm
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
+# Configure the Streamlit page
 st.set_page_config(
     page_title="Fitbit User Analysis Dashboard",
     layout="wide",
@@ -22,11 +23,13 @@ def load_activity_data(file_path):
 def load_database_data(file_path):
     conn = sqlite3.connect(file_path)
 
+    # Reading tables from the database
     hourly_steps = pd.read_sql_query("SELECT * FROM hourly_steps", conn)
     hourly_calories = pd.read_sql_query("SELECT * FROM hourly_calories", conn)
     hourly_intensity = pd.read_sql_query("SELECT * FROM hourly_intensity", conn)
     daily_activity = pd.read_sql_query("SELECT * FROM daily_activity", conn)
 
+    # Checking if minute_sleep table exists; read it if present
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='minute_sleep'")
     if cursor.fetchone():
@@ -34,6 +37,7 @@ def load_database_data(file_path):
     else:
         sleep_data = pd.DataFrame()
 
+    # Checking if weight_log table exists; read it if present
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='weight_log'")
     if cursor.fetchone():
         weight_data = pd.read_sql_query("SELECT * FROM weight_log", conn)
@@ -42,6 +46,7 @@ def load_database_data(file_path):
 
     conn.close()
 
+    # Return all data as a dictionary
     data = {
         'hourly_steps': hourly_steps,
         'hourly_calories': hourly_calories,
@@ -55,6 +60,7 @@ def load_database_data(file_path):
 
 
 def preprocess_time_data(df):
+    # Converting any column that could represent a date/time to datetime
     if 'ActivityDate' in df.columns:
         df['ActivityDate'] = pd.to_datetime(df['ActivityDate'])
 
@@ -80,13 +86,17 @@ def classify_user(activity_count):
 
 
 def get_user_classification(df):
+    # Counting how many rows of activity data each user has
     user_activity_counts = df['Id'].value_counts().reset_index()
     user_activity_counts.columns = ['Id', 'ActivityCount']
+
+    # Apply classification function
     user_activity_counts['Class'] = user_activity_counts['ActivityCount'].apply(classify_user)
     return user_activity_counts
 
 
 def plot_total_distance_per_user(df):
+    # Sum the total distance for each user
     total_distance_per_user = df.groupby('Id')['TotalDistance'].sum().reset_index()
     total_distance_per_user = total_distance_per_user.sort_values('TotalDistance', ascending=False)
 
@@ -102,10 +112,13 @@ def plot_total_distance_per_user(df):
 
 
 def plot_workout_frequency_by_day(df):
+    # Extracting the day name from the ActivityDate
     df['DayOfWeek'] = df['ActivityDate'].dt.day_name()
 
+    # Defining a custom day order
     day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
+    # Counting how many activity entries fall on each day of the week
     workout_frequency = df['DayOfWeek'].value_counts().reindex(day_order).fillna(0)
 
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -124,17 +137,20 @@ def get_activity_summary(daily_activity, user_id, selected_date=None):
     if daily_activity.empty:
         return None
 
+    # Filtering the DataFrame for the specified user
     user_data = daily_activity[daily_activity['Id'] == user_id].copy()
 
     if user_data.empty:
         return None
 
+    # Further filtering by selected_date if provided
     if selected_date:
         user_data = user_data[user_data['ActivityDate'].dt.date == selected_date]
 
     if user_data.empty:
         return None
 
+    # If a single date is selected, return specific metrics for that date
     if selected_date:
         row = user_data.iloc[0]
         return {
@@ -148,6 +164,7 @@ def get_activity_summary(daily_activity, user_id, selected_date=None):
             'TotalActiveMinutes': row['VeryActiveMinutes'] + row['FairlyActiveMinutes'] + row['LightlyActiveMinutes']
         }
 
+    # Otherwise, return mean values across all days for this user
     return {
         'Calories': user_data['Calories'].mean(),
         'TotalSteps': user_data['TotalSteps'].mean(),
@@ -162,15 +179,20 @@ def get_activity_summary(daily_activity, user_id, selected_date=None):
 
 
 def plot_calories_burnt(df, user_id, start_date=None, end_date=None):
+    # Filtering the data for the given user
     user_data = df[df['Id'] == user_id].copy()
 
+    # Filtering by start_date if provided
     if start_date:
         start_date = pd.to_datetime(start_date)
         user_data = user_data[user_data['ActivityDate'] >= start_date]
+
+    # Filtering by end_date if provided
     if end_date:
         end_date = pd.to_datetime(end_date)
         user_data = user_data[user_data['ActivityDate'] <= end_date]
 
+    # Creating the plot
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(user_data['ActivityDate'], user_data['Calories'], marker='o', linestyle='-')
     ax.set_xlabel('Date')
@@ -189,26 +211,31 @@ def plot_steps_calories_relationship(df, user_id):
     if user_data.empty:
         return None
 
+    # Creating a scatter plot of TotalSteps vs. Calories
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.scatter(user_data['TotalSteps'], user_data['Calories'], alpha=0.7)
 
+    # Building a simple linear regression model
     X = user_data['TotalSteps']
     X_with_const = sm.add_constant(X)
     y = user_data['Calories']
-
     model = sm.OLS(y, X_with_const).fit()
 
+    # Predicting values for the regression line
     x_range = np.linspace(X.min(), X.max(), 100)
     X_pred = sm.add_constant(x_range)
     y_pred = model.predict(X_pred)
 
+    # Plot the regression line
     ax.plot(x_range, y_pred, 'r-', linewidth=2)
 
+    # Setting labels and title
     ax.set_title(f'Relationship between Steps and Calories for User {user_id}')
     ax.set_xlabel('Total Steps')
     ax.set_ylabel('Calories Burnt')
     ax.grid(True, alpha=0.3)
 
+    # Adding regression equation and R-squared to the plot
     equation = f"Calories = {model.params[0]:.2f} + {model.params[1]:.4f} * Steps"
     r_squared = f"R² = {model.rsquared:.3f}"
     ax.annotate(equation + "\n" + r_squared,
@@ -226,11 +253,13 @@ def plot_activity_breakdown(user_data):
     if user_data.empty:
         return None
 
+    # Calculating average minutes in each activity level
     very_active = user_data['VeryActiveMinutes'].mean()
     fairly_active = user_data['FairlyActiveMinutes'].mean()
     lightly_active = user_data['LightlyActiveMinutes'].mean()
     sedentary = user_data['SedentaryMinutes'].mean()
 
+    # Creating pie chart
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.pie(
         [very_active, fairly_active, lightly_active, sedentary],
@@ -249,6 +278,7 @@ def plot_activity_breakdown(user_data):
 def plot_activity_over_time(db_data, user_id, metric, start_date=None, end_date=None):
     hourly_data = None
 
+    # Selecting the appropriate table and columns based on metric
     if metric == 'Steps':
         hourly_data = db_data['hourly_steps'].copy()
         y_column = 'StepTotal'
@@ -265,20 +295,26 @@ def plot_activity_over_time(db_data, user_id, metric, start_date=None, end_date=
     if hourly_data is None or hourly_data.empty:
         return None
 
+    # Filtering for the specified user
     user_data = hourly_data[hourly_data['Id'] == user_id].copy()
 
     if user_data.empty:
         return None
 
+    # Converting to datetime
     user_data['ActivityHour'] = pd.to_datetime(user_data['ActivityHour'])
 
+    # Filtering by date range if provided
     if start_date:
         start_date = pd.to_datetime(start_date)
         user_data = user_data[user_data['ActivityHour'].dt.date >= start_date.date()]
+
+    # Filtering by end_date if provided
     if end_date:
         end_date = pd.to_datetime(end_date)
         user_data = user_data[user_data['ActivityHour'].dt.date <= end_date.date()]
 
+    # Creating figure
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(user_data['ActivityHour'], user_data[y_column], marker='o', linestyle='-')
     ax.set_xlabel('Time')
@@ -295,6 +331,7 @@ def plot_time_of_day_analysis(db_data, metric):
     if not db_data:
         return None
 
+    # Define the 4-hour blocks in chronological order
     time_blocks = {
         '0-4': (0, 4),
         '4-8': (4, 8),
@@ -306,6 +343,7 @@ def plot_time_of_day_analysis(db_data, metric):
 
     chronological_order = ['0-4', '4-8', '8-12', '12-16', '16-20', '20-24']
 
+    # Helper function to assign a block based on the hour
     def assign_time_block(hour):
         for block, (start, end) in time_blocks.items():
             if start <= hour < end:
@@ -318,6 +356,7 @@ def plot_time_of_day_analysis(db_data, metric):
         hourly_data['Hour'] = hourly_data['ActivityHour'].dt.hour
         hourly_data['TimeBlock'] = hourly_data['Hour'].apply(assign_time_block)
 
+        # Calculating average steps per time block
         average_per_block = hourly_data.groupby('TimeBlock')['StepTotal'].mean().reset_index()
 
         y_column = 'StepTotal'
@@ -330,6 +369,7 @@ def plot_time_of_day_analysis(db_data, metric):
         hourly_data['Hour'] = hourly_data['ActivityHour'].dt.hour
         hourly_data['TimeBlock'] = hourly_data['Hour'].apply(assign_time_block)
 
+        # Calculating average calories per time block
         average_per_block = hourly_data.groupby('TimeBlock')['Calories'].mean().reset_index()
 
         y_column = 'Calories'
@@ -342,6 +382,7 @@ def plot_time_of_day_analysis(db_data, metric):
         hourly_data['Hour'] = hourly_data['ActivityHour'].dt.hour
         hourly_data['TimeBlock'] = hourly_data['Hour'].apply(assign_time_block)
 
+        # Calculating average intensity per time block
         average_per_block = hourly_data.groupby('TimeBlock')['TotalIntensity'].mean().reset_index()
 
         y_column = 'TotalIntensity'
@@ -358,8 +399,10 @@ def plot_time_of_day_analysis(db_data, metric):
         sleep_data['Hour'] = sleep_data['date'].dt.hour
         sleep_data['TimeBlock'] = sleep_data['Hour'].apply(assign_time_block)
 
+        # Filtering for sleep data
         sleep_data = sleep_data[sleep_data['value'] == 1]
 
+        # Counting sleep minutes per time block
         sleep_minutes = sleep_data.groupby('TimeBlock').size().reset_index(name='SleepMinutes')
         sleep_minutes['SleepMinutes'] /= len(sleep_data['Id'].unique())
 
@@ -369,6 +412,7 @@ def plot_time_of_day_analysis(db_data, metric):
         title = 'Average Sleep Minutes per 4-Hour Time Block'
         y_label = 'Average Sleep Minutes'
 
+    # Converting to ordered category for proper sorting
     average_per_block['TimeBlock'] = pd.Categorical(
         average_per_block['TimeBlock'],
         categories=chronological_order,
@@ -376,6 +420,7 @@ def plot_time_of_day_analysis(db_data, metric):
     )
     average_per_block = average_per_block.sort_values('TimeBlock')
 
+    # Create figure
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.bar(average_per_block['TimeBlock'], average_per_block[y_column])
     ax.set_xlabel('Time Block')
@@ -390,18 +435,23 @@ def plot_sleep_analysis(db_data, analysis_type):
     sleep_data = db_data.get('sleep_data', pd.DataFrame())
     daily_activity = db_data.get('daily_activity', pd.DataFrame())
 
+    # Checking if either table is missing or empty
     if sleep_data.empty or daily_activity.empty:
         return None
 
+    # Converting columns to datetime
     sleep_data['date'] = pd.to_datetime(sleep_data['date'])
     daily_activity['ActivityDate'] = pd.to_datetime(daily_activity['ActivityDate'])
 
+    # Filtering rows where value = 1 (indicating sleep)
     sleep_df = sleep_data[sleep_data['value'] == 1]
 
+    # Calculating sleep duration in minutes per day per user
     sleep_duration_df = sleep_df.groupby(['Id', sleep_df['date'].dt.date]).size().reset_index(
         name='SleepDurationMinutes')
     sleep_duration_df['date'] = pd.to_datetime(sleep_duration_df['date'])
 
+    # Merge with activity data
     merged_df = pd.merge(
         daily_activity,
         sleep_duration_df,
@@ -413,6 +463,7 @@ def plot_sleep_analysis(db_data, analysis_type):
     if merged_df.empty:
         return None
 
+    # Setting up the x-axis variable based on the analysis type
     if analysis_type == 'active_minutes':
         merged_df['TotalActiveMinutes'] = merged_df['VeryActiveMinutes'] + merged_df['FairlyActiveMinutes'] + merged_df[
             'LightlyActiveMinutes']
@@ -425,26 +476,32 @@ def plot_sleep_analysis(db_data, analysis_type):
         x_column = 'TotalSteps'
         x_label = 'Total Steps'
 
+    # Creating scatter plot
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.scatter(merged_df[x_column], merged_df['SleepDurationMinutes'], alpha=0.5)
 
+    # Adding regression line
     X = merged_df[[x_column]]
     y = merged_df['SleepDurationMinutes']
 
     model = LinearRegression()
     model.fit(X, y)
 
+    # Getting predictions for the regression line
     x_range = np.linspace(merged_df[x_column].min(), merged_df[x_column].max(), 100)
     x_range = x_range.reshape(-1, 1)
     y_pred = model.predict(x_range)
 
+    # Plot the regression line
     ax.plot(x_range, y_pred, 'r-', linewidth=2)
 
+    # Adding labels and title
     ax.set_title(f'Relationship between {x_label} and Sleep Duration')
     ax.set_xlabel(x_label)
     ax.set_ylabel('Sleep Duration (minutes)')
     ax.grid(True, alpha=0.3)
 
+    # Adding equation and R-squared
     r_squared = model.score(X, y)
     coefficient = model.coef_[0]
     intercept = model.intercept_
@@ -464,22 +521,27 @@ def plot_sleep_analysis(db_data, analysis_type):
 
 
 def plot_user_sleep_duration(sleep_data, user_id):
+    # Filtering for the selected user
     user_sleep = sleep_data[sleep_data['Id'] == user_id].copy()
 
     if user_sleep.empty:
         return None
 
+    # Filtering for sleep (value = 1)
     user_sleep = user_sleep[user_sleep['value'] == 1]
 
+    # Grouping by date to get sleep duration per day
     user_sleep_duration = user_sleep.groupby(user_sleep['date'].dt.date).size().reset_index(name='SleepMinutes')
     user_sleep_duration['date'] = pd.to_datetime(user_sleep_duration['date'])
 
+    # Plot sleep duration over time
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(user_sleep_duration['date'], user_sleep_duration['SleepMinutes'], marker='o', linestyle='-')
     ax.set_xlabel('Date')
     ax.set_ylabel('Sleep Duration (minutes)')
     ax.set_title(f'Sleep Duration for User {user_id}')
 
+    # Adding 8 hours reference line
     ax.axhline(y=480, color='r', linestyle='--', label='8 hours')
     ax.legend()
 
@@ -491,12 +553,15 @@ def plot_user_sleep_duration(sleep_data, user_id):
 
 
 def main():
-    activity_data_file_path = "daily_activity.csv"
+    # File paths for CSV and SQLite database (modify them as needed)
+    activity_data_file_path = "daily_acivity.csv"
     db_file_path = "fitbit_database.db"
 
+    # Loading the CSV and database data
     activity_df = load_activity_data(activity_data_file_path)
     db_data = load_database_data(db_file_path)
 
+    # Preprocessing the loaded DataFrames
     if not activity_df.empty:
         activity_df = preprocess_time_data(activity_df)
 
@@ -504,9 +569,11 @@ def main():
         if not db_data[key].empty:
             db_data[key] = preprocess_time_data(db_data[key])
 
+    # Setting up Streamlit Sidebar navigation
     st.sidebar.title("Navigation")
     page = st.sidebar.radio("Go to", ["Home", "User Analysis", "Time Analysis", "Sleep Analysis"])
 
+    # Gathering available user IDs for selection
     if not activity_df.empty:
         user_ids = sorted(activity_df['Id'].unique())
     else:
@@ -517,18 +584,20 @@ def main():
     else:
         selected_user_id = None
 
+    # Home Page
     if page == "Home":
         st.title("Fitbit User Analysis Dashboard")
 
         st.write("""
-                        This dashboard provides analysis of Fitbit user data, including activity patterns, 
-                        sleep duration, and fitness metrics. Use the sidebar to navigate through different 
-                        sections and select specific users for detailed analysis.
-                        """)
+                This dashboard provides analysis of Fitbit user data, including activity patterns, 
+                sleep duration, and fitness metrics. Use the sidebar to navigate through different 
+                sections and select specific users for detailed analysis.
+                """)
 
         st.header("Study Overview")
 
         if not activity_df.empty:
+            # Show overall summary metrics if activity_df is not empty
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
@@ -551,12 +620,14 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
+            # Plotting total distance per user if we have activity data
             if not activity_df.empty:
                 st.subheader("Total Distance per User")
                 fig = plot_total_distance_per_user(activity_df)
                 st.pyplot(fig)
 
         with col2:
+            # Plotting workout frequency by day if activity data is available
             if not activity_df.empty:
                 st.subheader("Workout Frequency by Day")
                 fig = plot_workout_frequency_by_day(activity_df)
@@ -565,6 +636,7 @@ def main():
         st.header("User Classification")
 
         if not activity_df.empty:
+            # Show classification pie chart and data if activity data is available
             user_classification = get_user_classification(activity_df)
 
             class_counts = user_classification['Class'].value_counts().reset_index()
@@ -582,6 +654,8 @@ def main():
 
             with col2:
                 st.dataframe(user_classification.sort_values('ActivityCount', ascending=False))
+
+    # User Analysis Page
     elif page == "User Analysis":
         st.title("User Activity Analysis")
 
@@ -590,6 +664,7 @@ def main():
 
             col1, col2 = st.columns(2)
 
+            # Determine date range from user data (either CSV or DB)
             if not activity_df.empty:
                 user_data = activity_df[activity_df['Id'] == selected_user_id]
                 min_date = user_data['ActivityDate'].min().date()
@@ -602,12 +677,14 @@ def main():
                 min_date = datetime.now().date() - timedelta(days=30)
                 max_date = datetime.now().date()
 
+            # Letting user pick a date range
             with col1:
                 start_date = st.date_input("Start Date", min_date, min_value=min_date, max_value=max_date)
 
             with col2:
                 end_date = st.date_input("End Date", max_date, min_value=min_date, max_value=max_date)
 
+            # Getting the relevant activity data from either CSV or DB
             if not activity_df.empty:
                 activity_data = activity_df
             elif 'daily_activity' in db_data and not db_data['daily_activity'].empty:
@@ -615,6 +692,7 @@ def main():
             else:
                 activity_data = pd.DataFrame()
 
+            # Show an overall summary if there's data
             if not activity_data.empty:
                 summary = get_activity_summary(activity_data, selected_user_id)
 
@@ -635,10 +713,12 @@ def main():
                     with col4:
                         st.metric("Active Minutes", int(summary['TotalActiveMinutes']))
 
+            # Tabs for different user-specific plots
             st.subheader("User Activity Visualizations")
 
             tab1, tab2, tab3 = st.tabs(["Calories", "Steps-Calories Relationship", "Activity Breakdown"])
 
+            # Calories Over Time
             with tab1:
                 if not activity_df.empty:
                     st.write("Calories Burnt Over Time")
@@ -652,6 +732,7 @@ def main():
                 else:
                     st.warning("No calories data available for this user.")
 
+            # Steps-Calories Relationship
             with tab2:
                 if not activity_df.empty:
                     st.write("Relationship Between Steps and Calories")
@@ -670,6 +751,7 @@ def main():
                 else:
                     st.warning("No activity data available for this user.")
 
+            # Activity Breakdown Pie Chart
             with tab3:
                 if 'daily_activity' in db_data and not db_data['daily_activity'].empty:
                     user_data = db_data['daily_activity'][db_data['daily_activity']['Id'] == selected_user_id].copy()
@@ -692,6 +774,7 @@ def main():
                 else:
                     st.warning("No activity data available for this user.")
 
+            # Hourly activity patterns
             if db_data:
                 st.subheader("Hourly Activity Patterns")
 
@@ -704,18 +787,22 @@ def main():
                     st.warning(f"No hourly {metric.lower()} data available for this user.")
         else:
             st.info("Please select a user ID from the sidebar to view detailed analysis.")
+
+    # Time Analysis Page
     elif page == "Time Analysis":
         st.title("Time-Based Activity Analysis")
 
         st.write("""
-                        This section analyzes activity patterns across different times of day and days of the week.
-                        """)
+            This section analyzes activity patterns across different times of day and days of the week.
+            """)
 
+        # Overall day-of-week patterns (using the CSV daily activity if available)
         if not activity_df.empty:
             st.header("Day of Week Patterns")
             day_fig = plot_workout_frequency_by_day(activity_df)
             st.pyplot(day_fig)
 
+        # Time of day analysis (using database hourly data if available)
         if db_data:
             st.header("Time of Day Patterns")
 
@@ -727,11 +814,13 @@ def main():
             else:
                 st.warning(f"No {metric.lower()} data available for time of day analysis.")
 
+        # User-specific time analysis
         if selected_user_id:
             st.header(f"Time Analysis for User {selected_user_id}")
 
             col1, col2 = st.columns(2)
 
+            # Determine date range from user data
             if not activity_df.empty:
                 user_data = activity_df[activity_df['Id'] == selected_user_id]
                 min_date = user_data['ActivityDate'].min().date()
@@ -744,6 +833,7 @@ def main():
                 min_date = datetime.now().date() - timedelta(days=30)
                 max_date = datetime.now().date()
 
+            # Letting user pick a date range
             with col1:
                 start_date = st.date_input("Start Date", min_date, min_value=min_date, max_value=max_date,
                                            key="time_start_date")
@@ -752,6 +842,7 @@ def main():
                 end_date = st.date_input("End Date", max_date, min_value=min_date, max_value=max_date,
                                          key="time_end_date")
 
+            # Plot hourly data for the selected user
             if db_data:
                 user_metric = st.selectbox("Select Metric", ["Steps", "Calories", "Intensity"], key="user_time_metric")
 
@@ -761,13 +852,16 @@ def main():
                 else:
                     st.warning(
                         f"No hourly {user_metric.lower()} data available for this user in the selected date range.")
+
+    # Sleep Analysis Page
     elif page == "Sleep Analysis":
         st.title("Sleep Duration Analysis")
 
         st.write("""
-                       This section analyzes factors affecting sleep duration based on activity patterns.
-                       """)
+                This section analyzes factors affecting sleep duration based on activity patterns.
+                """)
 
+        # If sleep data is in the DB, let the user compare sleep vs. activity metrics
         if db_data and 'sleep_data' in db_data and not db_data['sleep_data'].empty:
             analysis_type = st.selectbox(
                 "Analyze Sleep Duration vs:",
@@ -779,26 +873,31 @@ def main():
                 }[x]
             )
 
+            # Plot scatter + regression line
             sleep_fig = plot_sleep_analysis(db_data, analysis_type)
             if sleep_fig:
                 st.pyplot(sleep_fig)
 
+            # Time of day sleep patterns
             st.header("Sleep Patterns by Time of Day")
 
             sleep_time_fig = plot_time_of_day_analysis(db_data, "Sleep")
             if sleep_time_fig:
                 st.pyplot(sleep_time_fig)
 
+            # User-specific sleep analysis
             if selected_user_id:
                 st.header(f"Sleep Analysis for User {selected_user_id}")
 
                 sleep_data = db_data['sleep_data']
 
+                # Getting sleep duration over time for the selected user
                 sleep_fig, user_sleep_duration = plot_user_sleep_duration(sleep_data, selected_user_id)
 
                 if sleep_fig:
                     st.pyplot(sleep_fig)
 
+                    # Calculating sleep statistics
                     avg_sleep = user_sleep_duration['SleepMinutes'].mean()
                     min_sleep = user_sleep_duration['SleepMinutes'].min()
                     max_sleep = user_sleep_duration['SleepMinutes'].max()
@@ -814,12 +913,15 @@ def main():
                     with col3:
                         st.metric("Max Sleep (hours)", f"{max_sleep / 60:.1f}")
 
+                    # Comparing to activity
                     activity_data = db_data.get('daily_activity', pd.DataFrame())
 
                     if not activity_data.empty:
+                        # Filtering for the selected user
                         user_activity = activity_data[activity_data['Id'] == selected_user_id].copy()
 
                         if not user_activity.empty:
+                            # Merging sleep and activity data
                             merged_df = pd.merge(
                                 user_sleep_duration,
                                 user_activity,
@@ -831,6 +933,7 @@ def main():
                             if not merged_df.empty:
                                 st.subheader("Relationship Between Activity and Sleep")
 
+                                # Creating scatter plot with steps and sleep
                                 fig, ax = plt.subplots(figsize=(10, 6))
                                 ax.scatter(merged_df['TotalSteps'], merged_df['SleepMinutes'], alpha=0.7)
                                 ax.set_xlabel('Total Steps')
@@ -844,3 +947,7 @@ def main():
                     st.warning("No sleep data available for this user.")
         else:
             st.warning("Sleep data is not available. Please make sure the database contains the minute_sleep table.")
+
+
+if __name__ == "__main__":
+    main()
