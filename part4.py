@@ -1,4 +1,11 @@
 import sqlite3
+import matplotlib
+matplotlib.use('TkAgg')
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+import scipy.stats as stats
 
 # Connect to the SQLite database
 conn = sqlite3.connect('fitbit_database.db')
@@ -32,7 +39,6 @@ for row in rows:
 conn.close()
 
 #---------------------
-import sqlite3
 
 # Connect to the SQLite database
 conn = sqlite3.connect('fitbit_database.db')
