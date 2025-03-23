@@ -290,6 +290,101 @@ def plot_activity_over_time(db_data, user_id, metric, start_date=None, end_date=
     return fig
 
 
+def plot_time_of_day_analysis(db_data, metric):
+    if not db_data:
+        return None
+
+    time_blocks = {
+        '0-4': (0, 4),
+        '4-8': (4, 8),
+        '8-12': (8, 12),
+        '12-16': (12, 16),
+        '16-20': (16, 20),
+        '20-24': (20, 24)
+    }
+
+    chronological_order = ['0-4', '4-8', '8-12', '12-16', '16-20', '20-24']
+
+    def assign_time_block(hour):
+        for block, (start, end) in time_blocks.items():
+            if start <= hour < end:
+                return block
+        return None
+
+    if metric == 'Steps':
+        hourly_data = db_data['hourly_steps'].copy()
+        hourly_data['ActivityHour'] = pd.to_datetime(hourly_data['ActivityHour'])
+        hourly_data['Hour'] = hourly_data['ActivityHour'].dt.hour
+        hourly_data['TimeBlock'] = hourly_data['Hour'].apply(assign_time_block)
+
+        average_per_block = hourly_data.groupby('TimeBlock')['StepTotal'].mean().reset_index()
+
+        y_column = 'StepTotal'
+        title = 'Average Steps per 4-Hour Time Block'
+        y_label = 'Average Steps'
+
+    elif metric == 'Calories':
+        hourly_data = db_data['hourly_calories'].copy()
+        hourly_data['ActivityHour'] = pd.to_datetime(hourly_data['ActivityHour'])
+        hourly_data['Hour'] = hourly_data['ActivityHour'].dt.hour
+        hourly_data['TimeBlock'] = hourly_data['Hour'].apply(assign_time_block)
+
+        average_per_block = hourly_data.groupby('TimeBlock')['Calories'].mean().reset_index()
+
+        y_column = 'Calories'
+        title = 'Average Calories Burnt per 4-Hour Time Block'
+        y_label = 'Average Calories'
+
+    elif metric == 'Intensity':
+        hourly_data = db_data['hourly_intensity'].copy()
+        hourly_data['ActivityHour'] = pd.to_datetime(hourly_data['ActivityHour'])
+        hourly_data['Hour'] = hourly_data['ActivityHour'].dt.hour
+        hourly_data['TimeBlock'] = hourly_data['Hour'].apply(assign_time_block)
+
+        average_per_block = hourly_data.groupby('TimeBlock')['TotalIntensity'].mean().reset_index()
+
+        y_column = 'TotalIntensity'
+        title = 'Average Intensity per 4-Hour Time Block'
+        y_label = 'Average Intensity'
+
+    elif metric == 'Sleep':
+        sleep_data = db_data.get('sleep_data', pd.DataFrame())
+
+        if sleep_data.empty:
+            return None
+
+        sleep_data['date'] = pd.to_datetime(sleep_data['date'])
+        sleep_data['Hour'] = sleep_data['date'].dt.hour
+        sleep_data['TimeBlock'] = sleep_data['Hour'].apply(assign_time_block)
+
+        sleep_data = sleep_data[sleep_data['value'] == 1]
+
+        sleep_minutes = sleep_data.groupby('TimeBlock').size().reset_index(name='SleepMinutes')
+        sleep_minutes['SleepMinutes'] /= len(sleep_data['Id'].unique())
+
+        average_per_block = sleep_minutes
+
+        y_column = 'SleepMinutes'
+        title = 'Average Sleep Minutes per 4-Hour Time Block'
+        y_label = 'Average Sleep Minutes'
+
+    average_per_block['TimeBlock'] = pd.Categorical(
+        average_per_block['TimeBlock'],
+        categories=chronological_order,
+        ordered=True
+    )
+    average_per_block = average_per_block.sort_values('TimeBlock')
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(average_per_block['TimeBlock'], average_per_block[y_column])
+    ax.set_xlabel('Time Block')
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+    plt.tight_layout()
+
+    return fig
+
+
 def main():
     activity_data_file_path = "daily_activity.csv"
     db_file_path = "fitbit_database.db"
@@ -505,6 +600,61 @@ def main():
         else:
             st.info("Please select a user ID from the sidebar to view detailed analysis.")
     elif page == "Time Analysis":
-        pass
+        st.title("Time-Based Activity Analysis")
+
+        st.write("""
+                        This section analyzes activity patterns across different times of day and days of the week.
+                        """)
+
+        if not activity_df.empty:
+            st.header("Day of Week Patterns")
+            day_fig = plot_workout_frequency_by_day(activity_df)
+            st.pyplot(day_fig)
+
+        if db_data:
+            st.header("Time of Day Patterns")
+
+            metric = st.selectbox("Select Metric", ["Steps", "Calories", "Intensity", "Sleep"])
+
+            time_of_day_fig = plot_time_of_day_analysis(db_data, metric)
+            if time_of_day_fig:
+                st.pyplot(time_of_day_fig)
+            else:
+                st.warning(f"No {metric.lower()} data available for time of day analysis.")
+
+        if selected_user_id:
+            st.header(f"Time Analysis for User {selected_user_id}")
+
+            col1, col2 = st.columns(2)
+
+            if not activity_df.empty:
+                user_data = activity_df[activity_df['Id'] == selected_user_id]
+                min_date = user_data['ActivityDate'].min().date()
+                max_date = user_data['ActivityDate'].max().date()
+            elif 'daily_activity' in db_data and not db_data['daily_activity'].empty:
+                user_data = db_data['daily_activity'][db_data['daily_activity']['Id'] == selected_user_id]
+                min_date = user_data['ActivityDate'].min().date()
+                max_date = user_data['ActivityDate'].max().date()
+            else:
+                min_date = datetime.now().date() - timedelta(days=30)
+                max_date = datetime.now().date()
+
+            with col1:
+                start_date = st.date_input("Start Date", min_date, min_value=min_date, max_value=max_date,
+                                           key="time_start_date")
+
+            with col2:
+                end_date = st.date_input("End Date", max_date, min_value=min_date, max_value=max_date,
+                                         key="time_end_date")
+
+            if db_data:
+                user_metric = st.selectbox("Select Metric", ["Steps", "Calories", "Intensity"], key="user_time_metric")
+
+                hourly_fig = plot_activity_over_time(db_data, selected_user_id, user_metric, start_date, end_date)
+                if hourly_fig:
+                    st.pyplot(hourly_fig)
+                else:
+                    st.warning(
+                        f"No hourly {user_metric.lower()} data available for this user in the selected date range.")
     elif page == "Sleep Analysis":
         pass
