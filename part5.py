@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import statsmodels.api as sm
 import numpy as np
+from sklearn.linear_model import LinearRegression
 
 st.set_page_config(
     page_title="Fitbit User Analysis Dashboard",
@@ -385,6 +386,110 @@ def plot_time_of_day_analysis(db_data, metric):
     return fig
 
 
+def plot_sleep_analysis(db_data, analysis_type):
+    sleep_data = db_data.get('sleep_data', pd.DataFrame())
+    daily_activity = db_data.get('daily_activity', pd.DataFrame())
+
+    if sleep_data.empty or daily_activity.empty:
+        return None
+
+    sleep_data['date'] = pd.to_datetime(sleep_data['date'])
+    daily_activity['ActivityDate'] = pd.to_datetime(daily_activity['ActivityDate'])
+
+    sleep_df = sleep_data[sleep_data['value'] == 1]
+
+    sleep_duration_df = sleep_df.groupby(['Id', sleep_df['date'].dt.date]).size().reset_index(
+        name='SleepDurationMinutes')
+    sleep_duration_df['date'] = pd.to_datetime(sleep_duration_df['date'])
+
+    merged_df = pd.merge(
+        daily_activity,
+        sleep_duration_df,
+        left_on=['Id', daily_activity['ActivityDate'].dt.date],
+        right_on=['Id', sleep_duration_df['date'].dt.date],
+        how='inner'
+    )
+
+    if merged_df.empty:
+        return None
+
+    if analysis_type == 'active_minutes':
+        merged_df['TotalActiveMinutes'] = merged_df['VeryActiveMinutes'] + merged_df['FairlyActiveMinutes'] + merged_df[
+            'LightlyActiveMinutes']
+        x_column = 'TotalActiveMinutes'
+        x_label = 'Total Active Minutes'
+    elif analysis_type == 'sedentary_minutes':
+        x_column = 'SedentaryMinutes'
+        x_label = 'Sedentary Minutes'
+    elif analysis_type == 'steps':
+        x_column = 'TotalSteps'
+        x_label = 'Total Steps'
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(merged_df[x_column], merged_df['SleepDurationMinutes'], alpha=0.5)
+
+    X = merged_df[[x_column]]
+    y = merged_df['SleepDurationMinutes']
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    x_range = np.linspace(merged_df[x_column].min(), merged_df[x_column].max(), 100)
+    x_range = x_range.reshape(-1, 1)
+    y_pred = model.predict(x_range)
+
+    ax.plot(x_range, y_pred, 'r-', linewidth=2)
+
+    ax.set_title(f'Relationship between {x_label} and Sleep Duration')
+    ax.set_xlabel(x_label)
+    ax.set_ylabel('Sleep Duration (minutes)')
+    ax.grid(True, alpha=0.3)
+
+    r_squared = model.score(X, y)
+    coefficient = model.coef_[0]
+    intercept = model.intercept_
+
+    equation = f"Sleep = {intercept:.2f} + {coefficient:.4f} * {x_label}"
+    r_squared_text = f"R² = {r_squared:.3f}"
+
+    ax.annotate(equation + "\n" + r_squared_text,
+                xy=(0.05, 0.95),
+                xycoords='axes fraction',
+                fontsize=10,
+                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+
+    plt.tight_layout()
+
+    return fig
+
+
+def plot_user_sleep_duration(sleep_data, user_id):
+    user_sleep = sleep_data[sleep_data['Id'] == user_id].copy()
+
+    if user_sleep.empty:
+        return None
+
+    user_sleep = user_sleep[user_sleep['value'] == 1]
+
+    user_sleep_duration = user_sleep.groupby(user_sleep['date'].dt.date).size().reset_index(name='SleepMinutes')
+    user_sleep_duration['date'] = pd.to_datetime(user_sleep_duration['date'])
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(user_sleep_duration['date'], user_sleep_duration['SleepMinutes'], marker='o', linestyle='-')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Sleep Duration (minutes)')
+    ax.set_title(f'Sleep Duration for User {user_id}')
+
+    ax.axhline(y=480, color='r', linestyle='--', label='8 hours')
+    ax.legend()
+
+    plt.xticks(rotation=45)
+    plt.grid(True)
+    plt.tight_layout()
+
+    return fig, user_sleep_duration
+
+
 def main():
     activity_data_file_path = "daily_activity.csv"
     db_file_path = "fitbit_database.db"
@@ -657,4 +762,85 @@ def main():
                     st.warning(
                         f"No hourly {user_metric.lower()} data available for this user in the selected date range.")
     elif page == "Sleep Analysis":
-        pass
+        st.title("Sleep Duration Analysis")
+
+        st.write("""
+                       This section analyzes factors affecting sleep duration based on activity patterns.
+                       """)
+
+        if db_data and 'sleep_data' in db_data and not db_data['sleep_data'].empty:
+            analysis_type = st.selectbox(
+                "Analyze Sleep Duration vs:",
+                ["active_minutes", "sedentary_minutes", "steps"],
+                format_func=lambda x: {
+                    "active_minutes": "Active Minutes",
+                    "sedentary_minutes": "Sedentary Minutes",
+                    "steps": "Total Steps"
+                }[x]
+            )
+
+            sleep_fig = plot_sleep_analysis(db_data, analysis_type)
+            if sleep_fig:
+                st.pyplot(sleep_fig)
+
+            st.header("Sleep Patterns by Time of Day")
+
+            sleep_time_fig = plot_time_of_day_analysis(db_data, "Sleep")
+            if sleep_time_fig:
+                st.pyplot(sleep_time_fig)
+
+            if selected_user_id:
+                st.header(f"Sleep Analysis for User {selected_user_id}")
+
+                sleep_data = db_data['sleep_data']
+
+                sleep_fig, user_sleep_duration = plot_user_sleep_duration(sleep_data, selected_user_id)
+
+                if sleep_fig:
+                    st.pyplot(sleep_fig)
+
+                    avg_sleep = user_sleep_duration['SleepMinutes'].mean()
+                    min_sleep = user_sleep_duration['SleepMinutes'].min()
+                    max_sleep = user_sleep_duration['SleepMinutes'].max()
+
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        st.metric("Avg Sleep (hours)", f"{avg_sleep / 60:.1f}")
+
+                    with col2:
+                        st.metric("Min Sleep (hours)", f"{min_sleep / 60:.1f}")
+
+                    with col3:
+                        st.metric("Max Sleep (hours)", f"{max_sleep / 60:.1f}")
+
+                    activity_data = db_data.get('daily_activity', pd.DataFrame())
+
+                    if not activity_data.empty:
+                        user_activity = activity_data[activity_data['Id'] == selected_user_id].copy()
+
+                        if not user_activity.empty:
+                            merged_df = pd.merge(
+                                user_sleep_duration,
+                                user_activity,
+                                left_on=user_sleep_duration['date'].dt.date,
+                                right_on=user_activity['ActivityDate'].dt.date,
+                                how='inner'
+                            )
+
+                            if not merged_df.empty:
+                                st.subheader("Relationship Between Activity and Sleep")
+
+                                fig, ax = plt.subplots(figsize=(10, 6))
+                                ax.scatter(merged_df['TotalSteps'], merged_df['SleepMinutes'], alpha=0.7)
+                                ax.set_xlabel('Total Steps')
+                                ax.set_ylabel('Sleep Duration (minutes)')
+                                ax.set_title('Sleep Duration vs. Steps')
+                                ax.grid(True, alpha=0.3)
+                                plt.tight_layout()
+
+                                st.pyplot(fig)
+                else:
+                    st.warning("No sleep data available for this user.")
+        else:
+            st.warning("Sleep data is not available. Please make sure the database contains the minute_sleep table.")
