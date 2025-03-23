@@ -1,7 +1,11 @@
+import matplotlib
+matplotlib.use('TkAgg')
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 import numpy as np
+import statsmodels.formula.api as smf
+import statsmodels.api as sm
 
 file_path = 'daily_acivity.csv'
 df = pd.read_csv(file_path)
@@ -60,26 +64,44 @@ plt.grid(True)
 plt.show()
 
 
-# ---------------- Doesn't work yet, probably preprocessing needed ----------------
-import statsmodels.api as sm
+# ----------------------------------------------------------------------
+def user_regression(user_id):
+    model = smf.ols("Calories ~ TotalSteps + C(Id)", data=df).fit()
+    print(model.summary())
 
-df['Id'] = df['Id'].astype('category')
-df['Calories'] = pd.to_numeric(df['Calories'], errors='coerce')
-df = df.dropna(subset=['Calories'])
+    user_data = df[df['Id'] == user_id]
 
-# Create the design matrix
-X = pd.get_dummies(df[['TotalSteps', 'Id']], drop_first=True)
-X = sm.add_constant(X)
+    plt.figure(figsize=(10, 6))
 
-y = df['Calories']
-model = sm.OLS(y, X).fit()
-print(model.summary())
+    plt.scatter(user_data['TotalSteps'], user_data['Calories'], alpha=0.5, label='Data points')
 
-# Plot the relationship between TotalSteps and Calories burnt
-plt.figure(figsize=(10, 6))
-plt.scatter(df['TotalSteps'], df['Calories'], alpha=0.5)
-plt.xlabel('Total Steps')
-plt.ylabel('Calories Burnt')
-plt.title('Relationship between Total Steps and Calories Burnt')
-plt.grid(True)
-plt.show()
+    X = user_data['TotalSteps']
+    X = sm.add_constant(X)
+    y = user_data['Calories']
+
+    model_user = sm.OLS(y, X).fit()
+
+    x_range = np.linspace(X['TotalSteps'].min(), X['TotalSteps'].max(), 100)
+    X_pred = sm.add_constant(x_range)
+    y_pred = model_user.predict(X_pred)
+
+    plt.plot(x_range, y_pred, 'r-', linewidth=2)
+    plt.title(f'Relationship between Steps and Calories for User {user_id}')
+    plt.xlabel('Total Steps')
+    plt.ylabel('Calories Burnt')
+    plt.grid(True, alpha=0.3)
+
+    equation = f"Calories = {model_user.params[0]:.2f} + {model_user.params[1]:.4f} * Steps"
+    r_squared = f"R² = {model_user.rsquared:.3f}"
+    plt.annotate(
+                equation + "\n" + r_squared,
+                xy=(0.05, 0.95),
+                xycoords='axes fraction',
+                fontsize=10,
+                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8
+                ))
+
+    plt.tight_layout()
+    plt.show()
+
+user_regression(1503960366)
