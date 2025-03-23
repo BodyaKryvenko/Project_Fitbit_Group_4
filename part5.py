@@ -63,3 +63,18 @@ def preprocess_time_data(df):
         df['Date'] = pd.to_datetime(df['Date'])
 
     return df
+
+
+def main():
+    activity_data_file_path = "daily_activity.csv"
+    db_file_path = "fitbit_database.db"
+
+    activity_df = load_activity_data(activity_data_file_path)
+    db_data = load_database_data(db_file_path)
+
+    if not activity_df.empty:
+        activity_df = preprocess_time_data(activity_df)
+
+    for key in db_data:
+        if not db_data[key].empty:
+            db_data[key] = preprocess_time_data(db_data[key])
