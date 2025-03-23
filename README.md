@@ -8,7 +8,7 @@ The aim of this project is to analyse Fitbit data from 33 users who participated
 ## Data Files
 - `daily_acivity.csv`: Daily user activity data
 - `fitbit_database.db`: Database with tables for heart rate, sleep, calories, steps, and more
-- `chicago.csv`: Database with weather measuremens from the time and place where the survey was taken
+- `chicago.csv`: Weather measuremens from the time and place where the survey was taken
 
 ## Repository Structure
 - `part1.py`: Basic data exploration and visualization
