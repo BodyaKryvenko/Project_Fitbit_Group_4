@@ -6,3 +6,4 @@ sqlite3
 scikit-learn
 scipy
 statsmodels
+datetime
