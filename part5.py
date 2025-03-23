@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
+import matplotlib.pyplot as plt
 
 st.set_page_config(
     page_title="Fitbit User Analysis Dashboard",
@@ -81,6 +82,40 @@ def get_user_classification(df):
     return user_activity_counts
 
 
+def plot_total_distance_per_user(df):
+    total_distance_per_user = df.groupby('Id')['TotalDistance'].sum().reset_index()
+    total_distance_per_user = total_distance_per_user.sort_values('TotalDistance', ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(total_distance_per_user['Id'].astype(str), total_distance_per_user['TotalDistance'])
+    ax.set_xlabel('User ID')
+    ax.set_ylabel('Total Distance (km)')
+    ax.set_title('Total Distance per User')
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+
+    return fig
+
+
+def plot_workout_frequency_by_day(df):
+    df['DayOfWeek'] = df['ActivityDate'].dt.day_name()
+
+    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+    workout_frequency = df['DayOfWeek'].value_counts().reindex(day_order).fillna(0)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(workout_frequency.index, workout_frequency.values)
+    ax.set_xlabel('Day of the Week')
+    ax.set_ylabel('Number of Workouts')
+    ax.set_title('Frequency of Workouts by Day of the Week')
+    plt.xticks(rotation=45)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    return fig
+
+
 def main():
     activity_data_file_path = "daily_activity.csv"
     db_file_path = "fitbit_database.db"
@@ -109,7 +144,70 @@ def main():
         selected_user_id = None
 
     if page == "Home":
-        pass
+        st.title("Fitbit User Analysis Dashboard")
+
+        st.write("""
+                        This dashboard provides analysis of Fitbit user data, including activity patterns, 
+                        sleep duration, and fitness metrics. Use the sidebar to navigate through different 
+                        sections and select specific users for detailed analysis.
+                        """)
+
+        st.header("Study Overview")
+
+        if not activity_df.empty:
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("Participants", activity_df['Id'].nunique())
+
+            with col2:
+                avg_steps = int(activity_df['TotalSteps'].mean())
+                st.metric("Avg Daily Steps", f"{avg_steps:,}")
+
+            with col3:
+                avg_calories = int(activity_df['Calories'].mean())
+                st.metric("Avg Daily Calories", f"{avg_calories:,}")
+
+            with col4:
+                total_distance = int(activity_df['TotalDistance'].sum())
+                st.metric("Total Distance (km)", f"{total_distance:,}")
+
+        st.header("Graphical Summaries")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if not activity_df.empty:
+                st.subheader("Total Distance per User")
+                fig = plot_total_distance_per_user(activity_df)
+                st.pyplot(fig)
+
+        with col2:
+            if not activity_df.empty:
+                st.subheader("Workout Frequency by Day")
+                fig = plot_workout_frequency_by_day(activity_df)
+                st.pyplot(fig)
+
+        st.header("User Classification")
+
+        if not activity_df.empty:
+            user_classification = get_user_classification(activity_df)
+
+            class_counts = user_classification['Class'].value_counts().reset_index()
+            class_counts.columns = ['Class', 'Count']
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                fig, ax = plt.subplots(figsize=(8, 8))
+                ax.pie(class_counts['Count'], labels=class_counts['Class'], autopct='%1.1f%%', startangle=90,
+                       colors=['#91EE91', '#5DADE2', '#AF7AC5'])
+                ax.axis('equal')
+                ax.set_title('Distribution of User Types')
+                st.pyplot(fig)
+
+            with col2:
+                st.dataframe(user_classification.sort_values('ActivityCount', ascending=False))
     elif page == "User Analysis":
         pass
     elif page == "Time Analysis":
