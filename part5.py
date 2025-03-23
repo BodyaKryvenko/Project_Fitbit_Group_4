@@ -65,6 +65,22 @@ def preprocess_time_data(df):
     return df
 
 
+def classify_user(activity_count):
+    if activity_count <= 10:
+        return 'Light user'
+    elif 11 <= activity_count <= 15:
+        return 'Moderate user'
+    else:
+        return 'Heavy user'
+
+
+def get_user_classification(df):
+    user_activity_counts = df['Id'].value_counts().reset_index()
+    user_activity_counts.columns = ['Id', 'ActivityCount']
+    user_activity_counts['Class'] = user_activity_counts['ActivityCount'].apply(classify_user)
+    return user_activity_counts
+
+
 def main():
     activity_data_file_path = "daily_activity.csv"
     db_file_path = "fitbit_database.db"
