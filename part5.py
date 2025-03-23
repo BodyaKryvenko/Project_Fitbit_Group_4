@@ -47,3 +47,19 @@ def load_database_data(file_path):
     }
 
     return data
+
+
+def preprocess_time_data(df):
+    if 'ActivityDate' in df.columns:
+        df['ActivityDate'] = pd.to_datetime(df['ActivityDate'])
+
+    if 'ActivityHour' in df.columns:
+        df['ActivityHour'] = pd.to_datetime(df['ActivityHour'])
+
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'])
+
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'])
+
+    return df
